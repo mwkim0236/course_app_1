@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>알림</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .popup-container {
+            background: white;
+            padding: 40px 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            text-align: center;
+            max-width: 450px;
+            width: 100%;
+            animation: popIn 0.3s ease-out;
+        }
+        
+        @keyframes popIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.8) translateY(20px);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        
+        .emoji {
+            font-size: 64px;
+            margin-bottom: 20px;
+            display: block;
+        }
+        
+        .success {
+            color: #4CAF50;
+        }
+        
+        .error {
+            color: #ff6b6b;
+        }
+        
+        .warning {
+            color: #ffc107;
+        }
+        
+        .message {
+            font-size: 22px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 30px;
+            line-height: 1.4;
+        }
+        
+        .action-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            min-width: 150px;
+        }
+        
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+            text-decoration: none;
+            color: white;
+        }
+        
+        .retry-btn {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+        }
+        
+        .retry-btn:hover {
+            box-shadow: 0 8px 20px rgba(255, 107, 107, 0.3);
+        }
+
+        @media (max-width: 480px) {
+            .popup-container {
+                padding: 30px 20px;
+            }
+            
+            .message {
+                font-size: 20px;
+            }
+            
+            .emoji {
+                font-size: 48px;
+            }
+        }
+    </style>
+    <script>
+        function goBack() {
+            window.history.back();
+        }
+        
+        // 성공 메시지일 경우 3초 후 자동 이동
+        function autoRedirect() {
+            const message = "{{ message }}";
+            if (message.includes("성공") || message.includes("취소되었습니다")) {
+                setTimeout(function() {
+                    window.location.href = '/main';
+                }, 2000);
+            }
+        }
+        
+        window.onload = autoRedirect;
+    </script>
+</head>
+<body>
+    <div class="popup-container">
+        {% if "성공" in message %}
+            <span class="emoji success">🎉</span>
+        {% elif "초과" in message or "틀렸습니다" in message %}
+            <span class="emoji error">❌</span>
+        {% elif "이미" in message %}
+            <span class="emoji warning">⚠️</span>
+        {% elif "취소" in message %}
+            <span class="emoji success">✅</span>
+        {% else %}
+            <span class="emoji">ℹ️</span>
+        {% endif %}
+        
+        <h2 class="message">{{ message }}</h2>
+
+        {% if retry %}
+            <button onclick="goBack()" class="action-btn retry-btn">🔄 재시도</button>
+        {% else %}
+            {% if "성공" in message or "취소" in message %}
+                <p style="color: #666; font-size: 16px; margin-bottom: 20px;">2초 후 자동으로 이동합니다...</p>
+            {% endif %}
+            <a href="/main" class="action-btn">🏠 메인으로</a>
+        {% endif %}
+    </div>
+</body>
+</html>
