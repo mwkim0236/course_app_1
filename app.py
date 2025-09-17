@@ -1,9 +1,12 @@
 import os
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import (
+    Flask, render_template, request, redirect, url_for, session,
+    send_from_directory, make_response
+)
 from sqlalchemy import (
-    create_engine, text, MetaData, Table, Column,
+    create_engine, MetaData, Table, Column,
     String, Integer, ForeignKey, UniqueConstraint, select, func
 )
 from sqlalchemy.orm import Session
@@ -15,6 +18,18 @@ from sqlalchemy.exc import IntegrityError
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'fallback-secret-key')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+
+# ---- favicon (app 생성 이후에 둬야 함) ----
+@app.route('/favicon.ico')
+def favicon():
+    path = os.path.join(app.root_path, 'static', 'favicon.ico')
+    if os.path.exists(path):
+        return send_from_directory(
+            os.path.join(app.root_path, 'static'),
+            'favicon.ico',
+            mimetype='image/vnd.microsoft.icon'
+        )
+    return make_response(('', 204))
 
 # -----------------------------
 # DATABASE_URL 보정 (psycopg3)
@@ -36,8 +51,6 @@ host = parts.hostname or ""
 q = parse_qs(parts.query)
 
 def is_external_render_host(h: str) -> bool:
-    # Render External URL은 보통 render.com 도메인
-    # Internal URL은 내부 네트워크 호스트를 사용(환경에 따라 다를 수 있음)
     return "render.com" in h
 
 if is_external_render_host(host):
@@ -52,7 +65,7 @@ DATABASE_URL = urlunparse(parts._replace(query=new_query))
 # -----------------------------
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,            # 죽은 커넥션 자동 감지
+    pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
 )
@@ -125,7 +138,6 @@ init_db_and_seed()
 # -----------------------------
 @app.route("/")
 def home():
-    # 항상 이름 입력 페이지부터 시작
     return redirect(url_for("name_input"))
 
 @app.route("/main")
@@ -154,17 +166,14 @@ def apply():
     name = session["name"].strip()
     course = request.form.get("course")
 
-    # 트랜잭션 + 행 잠금으로 정원/중복 동시성 보호
     with Session(engine) as s:
         try:
-            # 이미 신청했는지 확인 (친절 메시지를 위해 선확인)
             already = s.execute(
                 select(registrations_t.c.id).where(registrations_t.c.student == name)
             ).first()
             if already:
                 return render_template("popup.html", message="이미 과목을 신청했습니다.", retry=False)
 
-            # 신청할 과목 행 잠금
             course_row = s.execute(
                 select(courses_t.c.name, courses_t.c.capacity)
                 .where(courses_t.c.name == course)
@@ -181,7 +190,6 @@ def apply():
             if registered >= capacity:
                 return render_template("popup.html", message="정원이 초과되었습니다.", retry=True)
 
-            # 등록 시도
             s.execute(
                 registrations_t.insert().values(student=name, course=course)
             )
@@ -189,7 +197,6 @@ def apply():
             return render_template("popup.html", message="신청 성공!", retry=False)
 
         except IntegrityError:
-            # UNIQUE(student) 충돌 등
             s.rollback()
             return render_template("popup.html", message="이미 과목을 신청했습니다.", retry=False)
 
@@ -255,7 +262,6 @@ def admin_reset():
     if not session.get("is_admin"):
         return redirect(url_for("admin_login"))
 
-    # 전체 초기화: 신청 삭제 + 과목테이블 기본값 재시드
     with engine.begin() as conn:
         conn.execute(registrations_t.delete())
         conn.execute(courses_t.delete())
