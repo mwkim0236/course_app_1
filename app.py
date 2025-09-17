@@ -17,7 +17,7 @@ DEFAULT_COURSES = {
     "비즈": {"capacity": 4, "students": []},
     "모루인형": {"capacity": 3, "students": []},
     "슈링클": {"capacity": 4, "students": []},
-    "꽃꽃이": {"capacity": 2, "students": []},
+    "꽃꽂이": {"capacity": 2, "students": []},
     "뜨개질": {"capacity": 2, "students": []},
 }
 
