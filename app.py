@@ -1,26 +1,60 @@
 import os
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+
 from flask import Flask, render_template, request, redirect, url_for, session
-from sqlalchemy import create_engine, text, MetaData, Table, Column, String, Integer, ForeignKey, UniqueConstraint, select, func
+from sqlalchemy import (
+    create_engine, text, MetaData, Table, Column,
+    String, Integer, ForeignKey, UniqueConstraint, select, func
+)
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
+# -----------------------------
+# Flask & 환경변수
+# -----------------------------
 app = Flask(__name__)
-
-# ----- 환경 변수 -----
 app.secret_key = os.environ.get('SECRET_KEY', 'fallback-secret-key')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
-# Render의 DATABASE_URL 보정 (postgres:// -> postgresql://)
-_raw_db_url = os.environ.get("DATABASE_URL")
-if not _raw_db_url:
+# -----------------------------
+# DATABASE_URL 보정 (psycopg3)
+# -----------------------------
+_raw = os.environ.get("DATABASE_URL")
+if not _raw:
     raise RuntimeError("DATABASE_URL 환경변수가 필요합니다. Render의 Postgres 연결 문자열을 설정하세요.")
-DATABASE_URL = _raw_db_url.replace("postgres://", "postgresql://", 1)
 
-# ----- DB 엔진/스키마 -----
+# 1) postgres:// → postgresql://
+url = _raw.replace("postgres://", "postgresql://", 1)
+
+# 2) psycopg3 드라이버 강제: postgresql+psycopg://
+if url.startswith("postgresql://"):
+    url = "postgresql+psycopg://" + url[len("postgresql://"):]
+
+# 3) External(URL에 render.com 포함)일 때만 sslmode=require 자동 추가
+parts = urlparse(url)
+host = parts.hostname or ""
+q = parse_qs(parts.query)
+
+def is_external_render_host(h: str) -> bool:
+    # Render External URL은 보통 render.com 도메인
+    # Internal URL은 내부 네트워크 호스트를 사용(환경에 따라 다를 수 있음)
+    return "render.com" in h
+
+if is_external_render_host(host):
+    if "sslmode" not in q or not q["sslmode"]:
+        q["sslmode"] = ["require"]
+
+new_query = urlencode(q, doseq=True)
+DATABASE_URL = urlunparse(parts._replace(query=new_query))
+
+# -----------------------------
+# SQLAlchemy 엔진/스키마
+# -----------------------------
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,            # 죽은 커넥션 자동 감지
-    pool_size=5, max_overflow=10,  # 가벼운 풀 설정
+    pool_size=5,
+    max_overflow=10,
 )
 
 metadata = MetaData()
@@ -51,9 +85,7 @@ DEFAULT_COURSES = {
 def init_db_and_seed():
     """테이블 생성 및 기본 과목 시드"""
     metadata.create_all(engine)
-
     with engine.begin() as conn:
-        # 과목 테이블이 비어 있으면 기본값 삽입
         count = conn.execute(select(func.count()).select_from(courses_t)).scalar_one()
         if count == 0:
             conn.execute(
@@ -62,7 +94,7 @@ def init_db_and_seed():
             )
 
 def get_course_status():
-    """템플릿에 주입할 현재 상태 dict로 구성"""
+    """템플릿에 주입할 현재 상태 dict 구성"""
     with engine.connect() as conn:
         rows = conn.execute(select(courses_t.c.name, courses_t.c.capacity)).all()
         status = {}
@@ -71,7 +103,9 @@ def get_course_status():
                 select(func.count()).select_from(registrations_t).where(registrations_t.c.course == name)
             ).scalar_one()
             students = [r[0] for r in conn.execute(
-                select(registrations_t.c.student).where(registrations_t.c.course == name).order_by(registrations_t.c.id.asc())
+                select(registrations_t.c.student)
+                .where(registrations_t.c.course == name)
+                .order_by(registrations_t.c.id.asc())
             ).all()]
             status[name] = {"capacity": capacity, "registered": registered, "students": students}
         return status
@@ -86,9 +120,12 @@ def get_my_course(student_name: str):
 # 앱 시작 시 DB 초기화
 init_db_and_seed()
 
-# ----- Routes -----
+# -----------------------------
+# Routes
+# -----------------------------
 @app.route("/")
 def home():
+    # 항상 이름 입력 페이지부터 시작
     return redirect(url_for("name_input"))
 
 @app.route("/main")
@@ -120,7 +157,7 @@ def apply():
     # 트랜잭션 + 행 잠금으로 정원/중복 동시성 보호
     with Session(engine) as s:
         try:
-            # 이미 신청했는지 확인 (유니크 제약이 있지만 사용자 친화적 메시지 위해 선확인)
+            # 이미 신청했는지 확인 (친절 메시지를 위해 선확인)
             already = s.execute(
                 select(registrations_t.c.id).where(registrations_t.c.student == name)
             ).first()
@@ -152,7 +189,7 @@ def apply():
             return render_template("popup.html", message="신청 성공!", retry=False)
 
         except IntegrityError:
-            # 동시성 경합으로 UNIQUE(student) 충돌 시
+            # UNIQUE(student) 충돌 등
             s.rollback()
             return render_template("popup.html", message="이미 과목을 신청했습니다.", retry=False)
 
@@ -218,7 +255,7 @@ def admin_reset():
     if not session.get("is_admin"):
         return redirect(url_for("admin_login"))
 
-    # 전체 초기화: 신청 삭제 + 과목 테이블을 기본값으로 재시드(용량 원복 포함)
+    # 전체 초기화: 신청 삭제 + 과목테이블 기본값 재시드
     with engine.begin() as conn:
         conn.execute(registrations_t.delete())
         conn.execute(courses_t.delete())
@@ -228,6 +265,9 @@ def admin_reset():
         )
     return render_template("popup.html", message="모든 수강신청 데이터가 초기화되었습니다.", retry=False)
 
+# -----------------------------
+# 로컬 실행
+# -----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
