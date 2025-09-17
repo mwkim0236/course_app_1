@@ -5,293 +5,176 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>관리자 페이지</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
         }
-        
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding-top: 20px;
-        }
-        
         .header {
             background: white;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
             text-align: center;
-            margin-bottom: 30px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-        
-        .header h2 {
-            color: #333;
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-        
-        .admin-info {
-            color: #666;
-            font-size: 18px;
-        }
-        
-        .courses-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 25px;
-            margin-bottom: 30px;
-        }
-        
         .course-card {
             background: white;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-        
-        .course-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
-        }
-        
-        .course-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #f1f3f4;
-        }
-        
         .course-title {
-            font-size: 24px;
-            font-weight: 700;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
             color: #333;
         }
-        
         .capacity-info {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #007bff;
             color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 14px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            display: inline-block;
+            margin-bottom: 15px;
         }
-        
-        .students-list {
-            list-style: none;
-        }
-        
         .student-item {
             background: #f8f9fa;
-            padding: 15px 20px;
-            margin-bottom: 10px;
-            border-radius: 12px;
+            padding: 10px 15px;
+            margin: 5px 0;
+            border-radius: 5px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            transition: all 0.3s ease;
         }
-        
-        .student-item:hover {
-            background: #e9ecef;
-            transform: translateX(5px);
-        }
-        
         .student-name {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 500;
-            color: #333;
         }
-        
         .delete-btn {
-            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+            background: #dc3545;
             color: white;
             border: none;
-            padding: 8px 15px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 3px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            font-size: 12px;
         }
-        
         .delete-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
+            background: #c82333;
         }
-        
         .no-students {
             text-align: center;
             color: #666;
-            font-size: 16px;
             font-style: italic;
-            padding: 30px 20px;
+            padding: 20px;
             background: #f8f9fa;
-            border-radius: 12px;
+            border-radius: 5px;
         }
-        
         .navigation {
             background: white;
-            padding: 25px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            text-align: center;
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        
-        .nav-link {
-            color: white;
-            text-decoration: none;
-            padding: 15px 30px;
-            border-radius: 12px;
-            font-size: 18px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            display: inline-block;
-        }
-        
-        .nav-link:hover {
-            transform: translateY(-2px);
-            text-decoration: none;
-            color: white;
-        }
-        
-        .main-link {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        
-        .main-link:hover {
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
-        }
-        
-        .logout-link {
-            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
-        }
-        
-        .logout-link:hover {
-            box-shadow: 0 8px 20px rgba(255, 107, 107, 0.3);
-        }
-        
-        .stats-summary {
-            background: #f8f9fa;
             padding: 20px;
-            border-radius: 12px;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .nav-link {
+            display: inline-block;
+            margin: 0 10px;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .main-link {
+            background: #007bff;
+            color: white;
+        }
+        .logout-link {
+            background: #6c757d;
+            color: white;
+        }
+        .reset-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 0 10px;
+        }
+        .reset-btn:hover {
+            background: #c82333;
+        }
+        .stats-summary {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
             margin-bottom: 20px;
             text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-        
         .total-students {
-            font-size: 20px;
-            font-weight: 600;
+            font-size: 18px;
+            font-weight: bold;
             color: #333;
-        }
-
-        @media (max-width: 768px) {
-            .courses-container {
-                grid-template-columns: 1fr;
-            }
-            
-            .course-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 10px;
-            }
-            
-            .student-item {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 10px;
-            }
-            
-            .delete-btn {
-                align-self: flex-end;
-            }
-            
-            .navigation {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            .nav-link {
-                width: 100%;
-                max-width: 300px;
-            }
-            
-            .header h2 {
-                font-size: 28px;
-            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h2>⚙️ 관리자 대시보드</h2>
-            <p class="admin-info">수강신청 현황을 관리할 수 있습니다</p>
-        </div>
+    <div class="header">
+        <h1>🛠️ 관리자 대시보드</h1>
+        <p>수강신청 현황을 관리할 수 있습니다</p>
+    </div>
 
-        {% set total_students = [] %}
+    <div class="stats-summary">
+        {% set total_count = 0 %}
         {% for course, data in courses.items() %}
-            {% for student in data.students %}
-                {{ total_students.append(student) or "" }}
-            {% endfor %}
+            {% set total_count = total_count + data.registered %}
         {% endfor %}
-        
-        <div class="stats-summary">
-            <p class="total-students">📊 총 신청자 수: {{ total_students|length }}명</p>
-        </div>
+        <p class="total-students">📊 총 신청자 수: {{ total_count }}명</p>
+    </div>
 
-        <div class="courses-container">
-            {% for course, data in courses.items() %}
-                <div class="course-card">
-                    <div class="course-header">
-                        <h3 class="course-title">{{ course }}</h3>
-                        <span class="capacity-info">{{ data.registered }}/{{ data.capacity }}</span>
+    {% for course, data in courses.items() %}
+        <div class="course-card">
+            <div class="course-title">{{ course }}</div>
+            <span class="capacity-info">{{ data.registered }}/{{ data.capacity }}</span>
+            
+            {% if data.students %}
+                {% for student in data.students %}
+                    <div class="student-item">
+                        <span class="student-name">👤 {{ student }}</span>
+                        <form action="/admin/delete" method="POST" style="display:inline;">
+                            <input type="hidden" name="course" value="{{ course }}">
+                            <input type="hidden" name="student" value="{{ student }}">
+                            <button type="submit" class="delete-btn" onclick="return confirm('{{ student }}님의 신청을 삭제하시겠습니까?')">
+                                🗑️ 삭제
+                            </button>
+                        </form>
                     </div>
-                    
-                    <ul class="students-list">
-                        {% if data.students %}
-                            {% for student in data.students %}
-                                <li class="student-item">
-                                    <span class="student-name">👤 {{ student }}</span>
-                                    <form action="/admin/delete" method="POST" style="display:inline;">
-                                        <input type="hidden" name="course" value="{{ course }}">
-                                        <input type="hidden" name="student" value="{{ student }}">
-                                        <button type="submit" class="delete-btn" onclick="return confirm('{{ student }}님의 신청을 삭제하시겠습니까?')">
-                                            🗑️ 삭제
-                                        </button>
-                                    </form>
-                                </li>
-                            {% endfor %}
-                        {% else %}
-                            <li class="no-students">
-                                📝 아직 신청자가 없습니다
-                            </li>
-                        {% endif %}
-                    </ul>
+                {% endfor %}
+            {% else %}
+                <div class="no-students">
+                    📝 아직 신청자가 없습니다
                 </div>
-            {% endfor %}
+            {% endif %}
         </div>
+    {% endfor %}
 
-        <div class="navigation">
-            <a href="/main" class="nav-link main-link">🏠 메인 페이지</a>
-            <a href="/admin_logout" class="nav-link logout-link">🚪 로그아웃</a>
-        </div>
+    <div class="navigation">
+        <a href="/main" class="nav-link main-link">🏠 메인 페이지</a>
+        <a href="/admin_logout" class="nav-link logout-link">🚪 로그아웃</a>
+        
+        <form action="/admin/reset" method="POST" style="display:inline;">
+            <button type="submit" class="reset-btn" onclick="return confirm('⚠️ 정말로 모든 수강신청 데이터를 초기화하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다!')">
+                🔄 전체 초기화
+            </button>
+        </form>
     </div>
 </body>
 </html>
