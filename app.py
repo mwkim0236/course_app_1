@@ -1,70 +1,102 @@
 import os
-import json
 from flask import Flask, render_template, request, redirect, url_for, session
+from sqlalchemy import create_engine, text, MetaData, Table, Column, String, Integer, ForeignKey, UniqueConstraint, select, func
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 app = Flask(__name__)
 
-# 환경변수에서 값을 가져오고, 없으면 기본값 사용
+# ----- 환경 변수 -----
 app.secret_key = os.environ.get('SECRET_KEY', 'fallback-secret-key')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
-# 데이터 저장 파일 경로
-DATA_FILE = 'courses_data.json'
+# Render의 DATABASE_URL 보정 (postgres:// -> postgresql://)
+_raw_db_url = os.environ.get("DATABASE_URL")
+if not _raw_db_url:
+    raise RuntimeError("DATABASE_URL 환경변수가 필요합니다. Render의 Postgres 연결 문자열을 설정하세요.")
+DATABASE_URL = _raw_db_url.replace("postgres://", "postgresql://", 1)
 
-# 초기 과목 설정 (기본값)
+# ----- DB 엔진/스키마 -----
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,            # 죽은 커넥션 자동 감지
+    pool_size=5, max_overflow=10,  # 가벼운 풀 설정
+)
+
+metadata = MetaData()
+
+courses_t = Table(
+    "courses", metadata,
+    Column("name", String, primary_key=True),
+    Column("capacity", Integer, nullable=False),
+)
+
+registrations_t = Table(
+    "registrations", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("student", String, nullable=False, unique=True),  # 학생 1명 1과목
+    Column("course", String, ForeignKey("courses.name"), nullable=False),
+    UniqueConstraint("student", name="uq_student")
+)
+
 DEFAULT_COURSES = {
-    "베이킹": {"capacity": 3, "students": []},
-    "비즈": {"capacity": 4, "students": []},
-    "모루인형": {"capacity": 3, "students": []},
-    "슈링클": {"capacity": 4, "students": []},
-    "꽃꽂이": {"capacity": 2, "students": []},
-    "뜨개질": {"capacity": 2, "students": []},
+    "베이킹":   {"capacity": 3},
+    "비즈":     {"capacity": 4},
+    "모루인형": {"capacity": 3},
+    "슈링클":   {"capacity": 4},
+    "꽃꽂이":   {"capacity": 2},
+    "뜨개질":   {"capacity": 2},
 }
 
-def load_courses_data():
-    """JSON 파일에서 과목 데이터 로드"""
-    try:
-        if os.path.exists(DATA_FILE):
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                print(f"데이터 로드 성공: {len(data)} 과목")
-                return data
-        else:
-            print("데이터 파일이 존재하지 않음. 기본값 사용.")
-            return DEFAULT_COURSES.copy()
-    except Exception as e:
-        print(f"데이터 로드 실패: {e}. 기본값 사용.")
-        return DEFAULT_COURSES.copy()
+def init_db_and_seed():
+    """테이블 생성 및 기본 과목 시드"""
+    metadata.create_all(engine)
 
-def save_courses_data():
-    """과목 데이터를 JSON 파일에 저장"""
-    try:
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(courses, f, ensure_ascii=False, indent=2)
-        print(f"데이터 저장 성공: {len(courses)} 과목")
-    except Exception as e:
-        print(f"데이터 저장 실패: {e}")
+    with engine.begin() as conn:
+        # 과목 테이블이 비어 있으면 기본값 삽입
+        count = conn.execute(select(func.count()).select_from(courses_t)).scalar_one()
+        if count == 0:
+            conn.execute(
+                courses_t.insert(),
+                [{"name": n, "capacity": v["capacity"]} for n, v in DEFAULT_COURSES.items()]
+            )
 
-# 앱 시작 시 데이터 로드
-courses = load_courses_data()
+def get_course_status():
+    """템플릿에 주입할 현재 상태 dict로 구성"""
+    with engine.connect() as conn:
+        rows = conn.execute(select(courses_t.c.name, courses_t.c.capacity)).all()
+        status = {}
+        for name, capacity in rows:
+            registered = conn.execute(
+                select(func.count()).select_from(registrations_t).where(registrations_t.c.course == name)
+            ).scalar_one()
+            students = [r[0] for r in conn.execute(
+                select(registrations_t.c.student).where(registrations_t.c.course == name).order_by(registrations_t.c.id.asc())
+            ).all()]
+            status[name] = {"capacity": capacity, "registered": registered, "students": students}
+        return status
 
+def get_my_course(student_name: str):
+    with engine.connect() as conn:
+        row = conn.execute(
+            select(registrations_t.c.course).where(registrations_t.c.student == student_name)
+        ).first()
+        return row[0] if row else None
+
+# 앱 시작 시 DB 초기화
+init_db_and_seed()
+
+# ----- Routes -----
 @app.route("/")
 def home():
-    # 기능 1: 항상 이름 입력 페이지부터 시작
     return redirect(url_for("name_input"))
 
 @app.route("/main")
 def main():
-    # 이름이 입력되지 않았으면 이름 입력 페이지로
     if "name" not in session:
         return redirect(url_for("name_input"))
-
     name = session["name"]
-    course_status = {
-        c: {"capacity": data["capacity"], "registered": len(data["students"]), "students": data["students"]}
-        for c, data in courses.items()
-    }
-    return render_template("index.html", name=name, courses=course_status)
+    return render_template("index.html", name=name, courses=get_course_status())
 
 @app.route("/name_input")
 def name_input():
@@ -74,7 +106,7 @@ def name_input():
 def set_name():
     name = request.form.get("name")
     if name:
-        session["name"] = name
+        session["name"] = name.strip()
     return redirect(url_for("main"))
 
 @app.route("/apply", methods=["POST"])
@@ -82,59 +114,68 @@ def apply():
     if "name" not in session:
         return redirect(url_for("name_input"))
 
-    name = session["name"]
+    name = session["name"].strip()
     course = request.form.get("course")
 
-    # 이미 신청한 과목이 있으면 중복 신청 불가
-    for c, data in courses.items():
-        if name in data["students"]:
+    # 트랜잭션 + 행 잠금으로 정원/중복 동시성 보호
+    with Session(engine) as s:
+        try:
+            # 이미 신청했는지 확인 (유니크 제약이 있지만 사용자 친화적 메시지 위해 선확인)
+            already = s.execute(
+                select(registrations_t.c.id).where(registrations_t.c.student == name)
+            ).first()
+            if already:
+                return render_template("popup.html", message="이미 과목을 신청했습니다.", retry=False)
+
+            # 신청할 과목 행 잠금
+            course_row = s.execute(
+                select(courses_t.c.name, courses_t.c.capacity)
+                .where(courses_t.c.name == course)
+                .with_for_update()
+            ).first()
+            if not course_row:
+                return render_template("popup.html", message="존재하지 않는 과목입니다.", retry=True)
+
+            capacity = course_row.capacity
+            registered = s.execute(
+                select(func.count()).select_from(registrations_t).where(registrations_t.c.course == course)
+            ).scalar_one()
+
+            if registered >= capacity:
+                return render_template("popup.html", message="정원이 초과되었습니다.", retry=True)
+
+            # 등록 시도
+            s.execute(
+                registrations_t.insert().values(student=name, course=course)
+            )
+            s.commit()
+            return render_template("popup.html", message="신청 성공!", retry=False)
+
+        except IntegrityError:
+            # 동시성 경합으로 UNIQUE(student) 충돌 시
+            s.rollback()
             return render_template("popup.html", message="이미 과목을 신청했습니다.", retry=False)
-
-    # 정원 확인
-    if len(courses[course]["students"]) >= courses[course]["capacity"]:
-        return render_template("popup.html", message="정원이 초과되었습니다.", retry=True)
-
-    # 수강신청 처리
-    courses[course]["students"].append(name)
-    
-    # 데이터 저장
-    save_courses_data()
-    
-    return render_template("popup.html", message="신청 성공!", retry=False)
 
 @app.route("/my_course")
 def my_course():
     if "name" not in session:
         return redirect(url_for("name_input"))
-
     name = session["name"]
-    my_course = None
-    for c, data in courses.items():
-        if name in data["students"]:
-            my_course = c
-            break
-    return render_template("my_course.html", name=name, course=my_course)
+    return render_template("my_course.html", name=name, course=get_my_course(name))
 
-# 기능 2: 수강신청 정정 기능
 @app.route("/cancel_course", methods=["POST"])
 def cancel_course():
     if "name" not in session:
         return redirect(url_for("name_input"))
-
     name = session["name"]
-    
-    # 해당 사용자의 신청 내역 삭제
-    for c, data in courses.items():
-        if name in data["students"]:
-            data["students"].remove(name)
-            break
-    
-    # 데이터 저장
-    save_courses_data()
-    
+
+    with engine.begin() as conn:
+        conn.execute(
+            registrations_t.delete().where(registrations_t.c.student == name)
+        )
     return render_template("popup.html", message="신청이 취소되었습니다. 다시 신청해주세요.", retry=False)
 
-# ----------- 관리자 기능 ------------
+# -------- 관리자 --------
 @app.route("/admin_login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
@@ -150,12 +191,7 @@ def admin_login():
 def admin():
     if not session.get("is_admin"):
         return redirect(url_for("admin_login"))
-
-    course_status = {
-        c: {"capacity": data["capacity"], "registered": len(data["students"]), "students": data["students"]}
-        for c, data in courses.items()
-    }
-    return render_template("admin.html", courses=course_status)
+    return render_template("admin.html", courses=get_course_status())
 
 @app.route("/admin/delete", methods=["POST"])
 def admin_delete():
@@ -165,12 +201,11 @@ def admin_delete():
     course = request.form.get("course")
     student = request.form.get("student")
 
-    if course in courses and student in courses[course]["students"]:
-        courses[course]["students"].remove(student)
-        
-        # 데이터 저장
-        save_courses_data()
-
+    with engine.begin() as conn:
+        conn.execute(
+            registrations_t.delete()
+            .where(registrations_t.c.course == course, registrations_t.c.student == student)
+        )
     return redirect(url_for("admin"))
 
 @app.route("/admin_logout")
@@ -178,20 +213,22 @@ def admin_logout():
     session.pop("is_admin", None)
     return redirect(url_for("home"))
 
-# 관리자 전용: 모든 데이터 초기화
 @app.route("/admin/reset", methods=["POST"])
 def admin_reset():
     if not session.get("is_admin"):
         return redirect(url_for("admin_login"))
-    
-    global courses
-    courses = DEFAULT_COURSES.copy()
-    save_courses_data()
-    
+
+    # 전체 초기화: 신청 삭제 + 과목 테이블을 기본값으로 재시드(용량 원복 포함)
+    with engine.begin() as conn:
+        conn.execute(registrations_t.delete())
+        conn.execute(courses_t.delete())
+        conn.execute(
+            courses_t.insert(),
+            [{"name": n, "capacity": v["capacity"]} for n, v in DEFAULT_COURSES.items()]
+        )
     return render_template("popup.html", message="모든 수강신청 데이터가 초기화되었습니다.", retry=False)
 
 if __name__ == "__main__":
-    # 배포 환경에서는 debug=False로 설정
     port = int(os.environ.get('PORT', 5000))
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     app.run(host="0.0.0.0", port=port, debug=debug_mode)
