@@ -87,12 +87,13 @@ registrations_t = Table(
 )
 
 DEFAULT_COURSES = {
-    "베이킹":   {"capacity": 3},
-    "비즈":     {"capacity": 4},
-    "모루인형": {"capacity": 3},
-    "슈링클":   {"capacity": 4},
-    "꽃꽂이":   {"capacity": 2},
-    "뜨개질":   {"capacity": 2},
+    "미니올림픽":       {"capacity": 3},
+    "꽃꽂이":           {"capacity": 2},
+    "키캡&볼펜 꾸미기": {"capacity": 3},
+    "버터떡 만들기":    {"capacity": 3},
+    "무드등 만들기":    {"capacity": 4},
+    "토이 쿠키 만들기": {"capacity": 3},
+    "서지컬 팔찌 만들기": {"capacity": 3},
 }
 
 def init_db_and_seed():
