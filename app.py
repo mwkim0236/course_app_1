@@ -87,7 +87,7 @@ registrations_t = Table(
 )
 
 DEFAULT_COURSES = {
-    "미니올림픽":       {"capacity": 3},
+    "미니올림픽":       {"capacity": 4},
     "꽃꽂이":           {"capacity": 2},
     "키캡&볼펜 꾸미기": {"capacity": 3},
     "버터떡 만들기":    {"capacity": 3},
